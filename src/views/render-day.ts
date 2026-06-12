@@ -6,6 +6,7 @@ import type {
 	CalendarPlannerSettings,
 	CalendarTaskDay,
 	CalendarTaskItem,
+	CalendarTimeRange,
 	TaskSection,
 } from '../types';
 
@@ -19,7 +20,12 @@ interface DayColumnProps {
 		completed: boolean,
 	) => Promise<void>;
 	onAddTask: (section: TaskSection, text: string) => Promise<void>;
-	onCreateEvent?: () => void;
+	selectedEventPath?: string | null;
+	selectedTimelineRange?: CalendarTimeRange | null;
+	onCreateEvent?: (timeRange?: CalendarTimeRange) => void;
+	onSelectEvent?: (event: CalendarEvent) => void;
+	onShowEventDetails?: (event: CalendarEvent) => void;
+	onSelectTimeRange?: (timeRange: CalendarTimeRange) => void;
 	renderPlanningPanels?: (container: HTMLElement) => void;
 }
 
@@ -38,6 +44,8 @@ interface TimelineEventLayout extends ClippedTimelineEvent {
 
 const TIMELINE_HOUR_HEIGHT = 56;
 const MIN_EVENT_BLOCK_HEIGHT = 38;
+const TIMELINE_EVENT_LEFT_OFFSET = 66;
+const TIMELINE_SELECTION_MINUTES = 30;
 
 export function renderDayColumn(
 	container: HTMLElement,
@@ -76,7 +84,9 @@ function renderTimeline(parent: HTMLElement, props: DayColumnProps): void {
 		button.type = 'button';
 		button.setAttr('aria-label', 'Create event');
 		setIcon(button, 'plus');
-		button.addEventListener('click', props.onCreateEvent);
+		button.addEventListener('click', () => {
+			props.onCreateEvent?.();
+		});
 	}
 
 	const startHour = props.settings.timelineStartHour;
@@ -105,9 +115,76 @@ function renderTimeline(parent: HTMLElement, props: DayColumnProps): void {
 		marker.createDiv({ cls: 'ocp-time-line' });
 	}
 
+	const selectionLayer = body.createDiv({
+		cls: 'ocp-timeline-selection-layer',
+	});
+	let selectedRange = props.selectedTimelineRange ?? null;
+	let selectionAnchor = selectedRange?.startMinutes ?? null;
+	renderTimelineSelection(
+		selectionLayer,
+		selectedRange,
+		timelineStart,
+		timelineEnd,
+	);
+	body.addEventListener('click', (domEvent) => {
+		if ((domEvent.target as HTMLElement).closest('.ocp-event-card')) {
+			return;
+		}
+		const clickedMinutes = getTimelineMinutesFromPointer(
+			domEvent,
+			body,
+			timelineStart,
+			timelineEnd,
+		);
+		if (clickedMinutes === null) {
+			return;
+		}
+
+		const range =
+			domEvent.shiftKey && selectionAnchor !== null
+				? createTimelineRange(selectionAnchor, clickedMinutes, timelineEnd)
+				: createTimelineRange(clickedMinutes, clickedMinutes, timelineEnd);
+		if (!domEvent.shiftKey) {
+			selectionAnchor = clickedMinutes;
+		}
+		selectedRange = range;
+		clearSelectedEventCards(body);
+		renderTimelineSelection(selectionLayer, range, timelineStart, timelineEnd);
+		props.onSelectTimeRange?.(range);
+	});
+	body.addEventListener('contextmenu', (domEvent) => {
+		if ((domEvent.target as HTMLElement).closest('.ocp-event-card')) {
+			return;
+		}
+		if (!props.onCreateEvent) {
+			return;
+		}
+		const clickedMinutes = getTimelineMinutesFromPointer(
+			domEvent,
+			body,
+			timelineStart,
+			timelineEnd,
+		);
+		if (clickedMinutes === null) {
+			return;
+		}
+
+		domEvent.preventDefault();
+		const range =
+			selectedRange && isMinuteInRange(clickedMinutes, selectedRange)
+				? selectedRange
+				: createTimelineRange(clickedMinutes, clickedMinutes, timelineEnd);
+		selectedRange = range;
+		selectionAnchor = range.startMinutes;
+		clearSelectedEventCards(body);
+		renderTimelineSelection(selectionLayer, range, timelineStart, timelineEnd);
+		props.onSelectTimeRange?.(range);
+		props.onCreateEvent(range);
+	});
+
 	const eventLayer = body.createDiv({ cls: 'ocp-timeline-events' });
 	for (const layout of layouts) {
-		const card = renderEventCard(eventLayer, layout.event, props.settings);
+		const card = renderEventCard(eventLayer, layout.event, props);
 		card.addClass('is-timeline-block');
 		card.style.top = `${layout.top}px`;
 		card.style.height = `${layout.height}px`;
@@ -131,16 +208,22 @@ function renderTimeline(parent: HTMLElement, props: DayColumnProps): void {
 function renderEventCard(
 	parent: HTMLElement,
 	event: CalendarEvent,
-	settings: CalendarPlannerSettings,
+	props: DayColumnProps,
 ): HTMLElement {
 	const card = parent.createDiv({ cls: 'ocp-event-card' });
+	card.setAttr('role', 'button');
+	card.setAttr('tabindex', '0');
+	card.setAttr('aria-label', `Show details for ${event.title}`);
 	if (event.deadline) {
 		card.addClass('has-deadline');
 	}
 	if (event.important) {
 		card.addClass('has-important');
 	}
-	card.style.borderLeftColor = settings.categories[event.category];
+	if (props.selectedEventPath === event.path) {
+		card.addClass('is-selected');
+	}
+	card.style.borderLeftColor = props.settings.categories[event.category];
 	card.createDiv({ cls: 'ocp-event-title', text: event.title });
 	card.createDiv({
 		cls: 'ocp-event-time',
@@ -149,7 +232,123 @@ function renderEventCard(
 		)} - ${CATEGORY_LABELS[event.category]}`,
 	});
 	renderEventFlags(card, event);
+	card.addEventListener('click', (domEvent) => {
+		domEvent.stopPropagation();
+		clearTimelineSelection(card);
+		clearSelectedEventCards(parent);
+		card.addClass('is-selected');
+		props.onSelectEvent?.(event);
+	});
+	card.addEventListener('dblclick', (domEvent) => {
+		domEvent.stopPropagation();
+		props.onShowEventDetails?.(event);
+	});
+	card.addEventListener('keydown', (domEvent) => {
+		if (domEvent.key === 'Enter') {
+			domEvent.preventDefault();
+			props.onShowEventDetails?.(event);
+		}
+		if (domEvent.key === ' ') {
+			domEvent.preventDefault();
+			clearTimelineSelection(card);
+			clearSelectedEventCards(parent);
+			card.addClass('is-selected');
+			props.onSelectEvent?.(event);
+		}
+	});
 	return card;
+}
+
+function renderTimelineSelection(
+	parent: HTMLElement,
+	range: CalendarTimeRange | null,
+	timelineStart: number,
+	timelineEnd: number,
+): void {
+	parent.empty();
+	if (!range) {
+		return;
+	}
+
+	const start = Math.max(range.startMinutes, timelineStart);
+	const end = Math.min(range.endMinutes, timelineEnd);
+	if (end <= start) {
+		return;
+	}
+
+	const selection = parent.createDiv({ cls: 'ocp-timeline-selection' });
+	selection.style.top = `${
+		((start - timelineStart) / 60) * TIMELINE_HOUR_HEIGHT
+	}px`;
+	selection.style.height = `${
+		((end - start) / 60) * TIMELINE_HOUR_HEIGHT
+	}px`;
+	selection.createSpan({
+		text: `${minutesToTimeLabel(start)} - ${minutesToTimeLabel(end)}`,
+	});
+}
+
+function getTimelineMinutesFromPointer(
+	event: MouseEvent,
+	body: HTMLElement,
+	timelineStart: number,
+	timelineEnd: number,
+): number | null {
+	const rect = body.getBoundingClientRect();
+	if (
+		event.clientX < rect.left + TIMELINE_EVENT_LEFT_OFFSET ||
+		event.clientX > rect.right ||
+		event.clientY < rect.top ||
+		event.clientY > rect.bottom
+	) {
+		return null;
+	}
+
+	const rawMinutes =
+		timelineStart + ((event.clientY - rect.top) / TIMELINE_HOUR_HEIGHT) * 60;
+	const snappedMinutes = Math.floor(rawMinutes / 15) * 15;
+	return Math.min(
+		Math.max(snappedMinutes, timelineStart),
+		timelineEnd - TIMELINE_SELECTION_MINUTES,
+	);
+}
+
+function createTimelineRange(
+	anchorMinutes: number,
+	targetMinutes: number,
+	timelineEnd: number,
+): CalendarTimeRange {
+	const startMinutes = Math.min(anchorMinutes, targetMinutes);
+	const endMinutes = Math.min(
+		Math.max(anchorMinutes, targetMinutes) + TIMELINE_SELECTION_MINUTES,
+		timelineEnd,
+	);
+	return {
+		startMinutes,
+		endMinutes: Math.max(endMinutes, startMinutes + 15),
+	};
+}
+
+function isMinuteInRange(
+	minute: number,
+	range: CalendarTimeRange,
+): boolean {
+	return minute >= range.startMinutes && minute < range.endMinutes;
+}
+
+function clearSelectedEventCards(container: HTMLElement): void {
+	for (const card of Array.from(
+		container.querySelectorAll('.ocp-event-card.is-selected'),
+	)) {
+		card.removeClass('is-selected');
+	}
+}
+
+function clearTimelineSelection(container: HTMLElement): void {
+	container
+		.closest('.ocp-timeline-body')
+		?.querySelector('.ocp-timeline-selection-layer')
+		?.empty();
 }
 
 function renderEventFlags(parent: HTMLElement, event: CalendarEvent): void {

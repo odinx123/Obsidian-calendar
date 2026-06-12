@@ -37,6 +37,11 @@ export interface CalendarEventInput {
 	status: EventStatus;
 }
 
+export interface CalendarTimeRange {
+	startMinutes: number;
+	endMinutes: number;
+}
+
 export interface CalendarTaskItem {
 	path: string;
 	line: number;

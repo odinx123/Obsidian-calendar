@@ -10,7 +10,8 @@ import type {
 
 interface CreateEventModalOptions {
 	defaultDate: string;
-	defaultStartHour: number;
+	defaultStartMinutes: number;
+	defaultEndMinutes?: number;
 	onSubmit: (input: CalendarEventInput) => Promise<void>;
 }
 
@@ -58,8 +59,13 @@ export class CreateEventModal extends Modal {
 	}
 
 	private renderFields(contentEl: HTMLElement): void {
-		const startMinutes = getDefaultStartMinutes(this.options.defaultStartHour);
-		const endMinutes = Math.min(startMinutes + 60, 23 * 60 + 45);
+		const startMinutes = normalizeDefaultStartMinutes(
+			this.options.defaultStartMinutes,
+		);
+		const endMinutes = normalizeDefaultEndMinutes(
+			startMinutes,
+			this.options.defaultEndMinutes,
+		);
 
 		new Setting(contentEl).setName('Title').addText((text) => {
 			this.titleInput = text;
@@ -217,9 +223,24 @@ export class CreateEventModal extends Modal {
 	}
 }
 
-function getDefaultStartMinutes(defaultStartHour: number): number {
-	const hour = Math.min(Math.max(Math.trunc(defaultStartHour), 0), 23);
-	return hour * 60;
+function normalizeDefaultStartMinutes(defaultStartMinutes: number): number {
+	return Math.min(
+		Math.max(Math.trunc(defaultStartMinutes / 15) * 15, 0),
+		23 * 60 + 30,
+	);
+}
+
+function normalizeDefaultEndMinutes(
+	startMinutes: number,
+	defaultEndMinutes: number | undefined,
+): number {
+	const requestedEnd =
+		defaultEndMinutes ?? Math.min(startMinutes + 60, 23 * 60 + 45);
+	const normalizedEnd = Math.min(
+		Math.max(Math.trunc(requestedEnd / 15) * 15, startMinutes + 15),
+		23 * 60 + 45,
+	);
+	return normalizedEnd > startMinutes ? normalizedEnd : startMinutes + 15;
 }
 
 function parseTimeInput(value: string): number | null {

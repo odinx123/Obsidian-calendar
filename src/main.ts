@@ -1,12 +1,18 @@
-import { Notice, Plugin } from 'obsidian';
+import { Notice, Plugin, TFile } from 'obsidian';
 import { VIEW_TYPE_CALENDAR_PLANNER } from './constants';
 import { CreateEventModal } from './modals/create-event-modal';
+import { EventDetailModal } from './modals/event-detail-modal';
 import { CalendarRepository } from './services/calendar-repository';
 import {
 	DEFAULT_SETTINGS,
 	CalendarPlannerSettingTab,
 } from './settings';
-import type { CalendarEventInput, CalendarPlannerSettings } from './types';
+import type {
+	CalendarEvent,
+	CalendarEventInput,
+	CalendarPlannerSettings,
+	CalendarTimeRange,
+} from './types';
 import { CalendarPlannerView } from './views/calendar-view';
 
 export default class CalendarPlannerPlugin extends Plugin {
@@ -50,12 +56,26 @@ export default class CalendarPlannerPlugin extends Plugin {
 		}
 	}
 
-	openCreateEventModal(date = this.getActiveCalendarDate()): void {
+	openCreateEventModal(
+		date = this.getActiveCalendarDate(),
+		timeRange?: CalendarTimeRange,
+	): void {
 		new CreateEventModal(this.app, {
 			defaultDate: date,
-			defaultStartHour: this.settings.timelineStartHour,
+			defaultStartMinutes:
+				timeRange?.startMinutes ?? this.settings.timelineStartHour * 60,
+			defaultEndMinutes: timeRange?.endMinutes,
 			onSubmit: async (input) => {
 				await this.createEventNote(input);
+			},
+		}).open();
+	}
+
+	openEventDetailModal(event: CalendarEvent): void {
+		new EventDetailModal(this.app, {
+			event,
+			onOpenNote: async (selectedEvent) => {
+				await this.openEventNote(selectedEvent);
 			},
 		}).open();
 	}
@@ -84,6 +104,14 @@ export default class CalendarPlannerPlugin extends Plugin {
 			}
 		}
 		return new Date().toISOString().slice(0, 10);
+	}
+
+	private async openEventNote(event: CalendarEvent): Promise<void> {
+		const file = this.app.vault.getAbstractFileByPath(event.path);
+		if (!(file instanceof TFile)) {
+			throw new Error('Event note was not found.');
+		}
+		await this.app.workspace.getLeaf(true).openFile(file);
 	}
 
 	private async refreshCalendarViews(): Promise<void> {

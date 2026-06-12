@@ -241,9 +241,11 @@ function compareReminderEvents(
 	left: CalendarEvent,
 	right: CalendarEvent,
 ): number {
-	const deadlinePriority = Number(right.deadline) - Number(left.deadline);
-	if (deadlinePriority !== 0) {
-		return deadlinePriority;
+	if (left.deadline || right.deadline) {
+		if (left.deadline && right.deadline) {
+			return compareEventDateTime(left, right);
+		}
+		return left.deadline ? -1 : 1;
 	}
 
 	const importantPriority = Number(right.important) - Number(left.important);

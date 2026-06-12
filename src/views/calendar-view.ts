@@ -12,6 +12,7 @@ import type {
 	CalendarDayData,
 	CalendarEvent,
 	CalendarTaskItem,
+	CalendarTimeRange,
 	TaskSection,
 } from '../types';
 import { renderDayColumn } from './render-day';
@@ -22,6 +23,8 @@ export class CalendarPlannerView extends ItemView {
 	private selectedDate = getTodayString();
 	private monthEvents: CalendarEvent[] = [];
 	private dayData: CalendarDayData | null = null;
+	private selectedEventPath: string | null = null;
+	private selectedTimelineRange: CalendarTimeRange | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -61,6 +64,12 @@ export class CalendarPlannerView extends ItemView {
 			]);
 			this.monthEvents = [...monthEvents, ...nextMonthEvents];
 			this.dayData = dayData;
+			if (
+				this.selectedEventPath &&
+				!dayData.events.some((event) => event.path === this.selectedEventPath)
+			) {
+				this.selectedEventPath = null;
+			}
 			this.render();
 		} catch (error) {
 			this.renderError(error);
@@ -114,14 +123,29 @@ export class CalendarPlannerView extends ItemView {
 			events: dayData.events,
 			taskDay: dayData.tasks,
 			settings: this.plugin.settings,
+			selectedEventPath: this.selectedEventPath,
+			selectedTimelineRange: this.selectedTimelineRange,
 			onToggleTask: async (task, completed) => {
 				await this.toggleTask(task, completed);
 			},
 			onAddTask: async (section, text) => {
 				await this.addTask(section, text);
 			},
-			onCreateEvent: () => {
-				this.plugin.openCreateEventModal(this.selectedDate);
+			onCreateEvent: (timeRange) => {
+				this.plugin.openCreateEventModal(this.selectedDate, timeRange);
+			},
+			onSelectEvent: (event) => {
+				this.selectedEventPath = event.path;
+				this.selectedTimelineRange = null;
+			},
+			onShowEventDetails: (event) => {
+				this.selectedEventPath = event.path;
+				this.selectedTimelineRange = null;
+				this.plugin.openEventDetailModal(event);
+			},
+			onSelectTimeRange: (timeRange) => {
+				this.selectedEventPath = null;
+				this.selectedTimelineRange = timeRange;
 			},
 			renderPlanningPanels: (container) => {
 				renderPlanningPanels(container, monthProps);
@@ -142,6 +166,8 @@ export class CalendarPlannerView extends ItemView {
 
 	private async selectDate(date: string): Promise<void> {
 		this.selectedDate = date;
+		this.selectedEventPath = null;
+		this.selectedTimelineRange = null;
 		this.displayMonth = startOfMonth(dateFromString(date));
 		await this.refresh();
 	}
@@ -149,6 +175,8 @@ export class CalendarPlannerView extends ItemView {
 	private async shiftMonth(amount: number): Promise<void> {
 		this.displayMonth = addMonths(this.displayMonth, amount);
 		this.selectedDate = formatDate(this.displayMonth);
+		this.selectedEventPath = null;
+		this.selectedTimelineRange = null;
 		await this.refresh();
 	}
 
