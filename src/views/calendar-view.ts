@@ -8,7 +8,12 @@ import {
 	startOfMonth,
 } from '../date/date-utils';
 import type CalendarPlannerPlugin from '../main';
-import type { CalendarDayData, CalendarEvent, CalendarTaskItem } from '../types';
+import type {
+	CalendarDayData,
+	CalendarEvent,
+	CalendarTaskItem,
+	TaskSection,
+} from '../types';
 import { renderDayColumn } from './render-day';
 import { renderMonthColumn } from './render-month';
 
@@ -44,11 +49,13 @@ export class CalendarPlannerView extends ItemView {
 	async refresh(): Promise<void> {
 		this.renderLoading();
 		try {
-			const [monthEvents, dayData] = await Promise.all([
+			const nextMonth = addMonths(this.displayMonth, 1);
+			const [monthEvents, nextMonthEvents, dayData] = await Promise.all([
 				this.plugin.repository.readMonthEvents(this.displayMonth),
+				this.plugin.repository.readMonthEvents(nextMonth),
 				this.plugin.repository.readDay(this.selectedDate),
 			]);
-			this.monthEvents = monthEvents;
+			this.monthEvents = [...monthEvents, ...nextMonthEvents];
 			this.dayData = dayData;
 			this.render();
 		} catch (error) {
@@ -104,6 +111,9 @@ export class CalendarPlannerView extends ItemView {
 			onToggleTask: async (task, completed) => {
 				await this.toggleTask(task, completed);
 			},
+			onAddTask: async (section, text) => {
+				await this.addTask(section, text);
+			},
 		});
 	}
 
@@ -113,7 +123,7 @@ export class CalendarPlannerView extends ItemView {
 			error instanceof Error ? error.message : 'Unknown calendar error';
 		this.contentEl.createDiv({
 			cls: 'ocp-error',
-			text: `Calendar Planner error: ${message}`,
+			text: `Calendar planner error: ${message}`,
 		});
 		new Notice('Calendar planner failed to load.');
 	}
@@ -128,6 +138,18 @@ export class CalendarPlannerView extends ItemView {
 		this.displayMonth = addMonths(this.displayMonth, amount);
 		this.selectedDate = formatDate(this.displayMonth);
 		await this.refresh();
+	}
+
+	private async addTask(section: TaskSection, text: string): Promise<void> {
+		try {
+			await this.plugin.repository.addTask(this.selectedDate, section, text);
+			await this.refresh();
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : 'Could not add task';
+			new Notice(message);
+			await this.refresh();
+		}
 	}
 
 	private async toggleTask(

@@ -1,5 +1,6 @@
 import { App, TFile } from 'obsidian';
 import {
+	appendTaskToSection,
 	createTaskTemplate,
 	parseTaskDay,
 	updateCheckboxLine,
@@ -8,6 +9,7 @@ import type {
 	CalendarPlannerSettings,
 	CalendarTaskDay,
 	CalendarTaskItem,
+	TaskSection,
 } from '../types';
 import {
 	ensureFolderPath,
@@ -37,6 +39,23 @@ export class TaskStore {
 
 		const content = await this.app.vault.read(file);
 		return parseTaskDay(path, date, content);
+	}
+
+	async addTask(
+		date: string,
+		section: TaskSection,
+		text: string,
+	): Promise<void> {
+		await this.readDayTasks(date);
+		const path = getTaskFilePath(this.getSettings(), date);
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) {
+			throw new Error(`Task file not found: ${path}`);
+		}
+
+		const content = await this.app.vault.read(file);
+		const updated = appendTaskToSection(content, section, text);
+		await this.app.vault.modify(file, updated);
 	}
 
 	async toggleTask(

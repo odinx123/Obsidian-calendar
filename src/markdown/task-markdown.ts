@@ -68,6 +68,40 @@ export function parseTaskDay(
 	};
 }
 
+export function appendTaskToSection(
+	content: string,
+	section: TaskSection,
+	text: string,
+): string {
+	const taskText = text.replace(/\s+/g, ' ').trim();
+	if (!taskText) {
+		return content;
+	}
+
+	const lines = content.replace(/\r\n/g, '\n').split('\n');
+	const heading = section === 'most-important' ? '## Most important' : '## Tasks';
+	let headingIndex = findHeadingIndex(lines, heading);
+	if (headingIndex === -1) {
+		headingIndex = insertMissingSection(lines, heading);
+	}
+
+	const nextHeadingIndex = findNextHeadingIndex(lines, headingIndex + 1);
+	const sectionEnd = nextHeadingIndex === -1 ? lines.length : nextHeadingIndex;
+	for (let index = headingIndex + 1; index < sectionEnd; index += 1) {
+		if (/^\s*[-*]\s+\[[ xX]\]\s*$/.test(lines[index] ?? '')) {
+			lines[index] = `- [ ] ${taskText}`;
+			return lines.join('\n');
+		}
+	}
+
+	let insertAt = sectionEnd;
+	if (insertAt > headingIndex + 1 && lines[insertAt - 1]?.trim() === '') {
+		insertAt -= 1;
+	}
+	lines.splice(insertAt, 0, `- [ ] ${taskText}`);
+	return lines.join('\n');
+}
+
 export function updateCheckboxLine(
 	content: string,
 	lineNumber: number,
@@ -81,6 +115,27 @@ export function updateCheckboxLine(
 
 	lines[lineNumber] = line.replace(/\[[ xX]\]/, completed ? '[x]' : '[ ]');
 	return lines.join('\n');
+}
+
+function findHeadingIndex(lines: string[], heading: string): number {
+	const normalizedHeading = heading.toLowerCase();
+	return lines.findIndex((line) => line.trim().toLowerCase() === normalizedHeading);
+}
+
+function findNextHeadingIndex(lines: string[], start: number): number {
+	return lines.findIndex(
+		(line, index) => index >= start && /^##\s+/.test(line.trim()),
+	);
+}
+
+function insertMissingSection(lines: string[], heading: string): number {
+	const notesIndex = findHeadingIndex(lines, '## Notes');
+	const insertAt = notesIndex === -1 ? lines.length : notesIndex;
+	if (insertAt > 0 && lines[insertAt - 1]?.trim() !== '') {
+		lines.splice(insertAt, 0, '');
+	}
+	lines.splice(insertAt, 0, heading, '');
+	return insertAt;
 }
 
 function parseHeading(line: string): ParserSection | null {

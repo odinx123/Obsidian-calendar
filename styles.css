@@ -347,3 +347,27 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+.ocp-add-task-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 32px;
+	gap: 6px;
+	align-items: center;
+}
+
+.ocp-add-task-input {
+	width: 100%;
+	min-width: 0;
+	height: 32px;
+	box-sizing: border-box;
+}
+
+.ocp-add-task-button {
+	width: 32px;
+	height: 32px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border-radius: 6px;
+}

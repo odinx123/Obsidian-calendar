@@ -13,6 +13,7 @@ import type {
 	CalendarEvent,
 	CalendarPlannerSettings,
 	CalendarTaskItem,
+	TaskSection,
 } from '../types';
 
 export class CalendarRepository {
@@ -52,6 +53,14 @@ export class CalendarRepository {
 			events,
 			tasks,
 		};
+	}
+
+	async addTask(
+		date: string,
+		section: TaskSection,
+		text: string,
+	): Promise<void> {
+		await this.taskStore.addTask(date, section, text);
 	}
 
 	async toggleTask(task: CalendarTaskItem, completed: boolean): Promise<void> {

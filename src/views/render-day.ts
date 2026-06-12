@@ -1,3 +1,4 @@
+import { setIcon } from 'obsidian';
 import { CATEGORY_LABELS } from '../constants';
 import { minutesToTimeLabel } from '../date/date-utils';
 import type {
@@ -5,6 +6,7 @@ import type {
 	CalendarPlannerSettings,
 	CalendarTaskDay,
 	CalendarTaskItem,
+	TaskSection,
 } from '../types';
 
 interface DayColumnProps {
@@ -16,6 +18,7 @@ interface DayColumnProps {
 		task: CalendarTaskItem,
 		completed: boolean,
 	) => Promise<void>;
+	onAddTask: (section: TaskSection, text: string) => Promise<void>;
 }
 
 export function renderDayColumn(
@@ -35,8 +38,14 @@ export function renderDayColumn(
 	renderTimeline(body.createDiv({ cls: 'ocp-panel ocp-timeline-panel' }), props);
 
 	const side = body.createDiv({ cls: 'ocp-day-side' });
-	renderTaskList(side, 'Most important', props.taskDay.mostImportant.slice(0, 3), props);
-	renderTaskList(side, 'Tasks', props.taskDay.tasks, props);
+	renderTaskList(
+		side,
+		'Most important',
+		props.taskDay.mostImportant.slice(0, 3),
+		'most-important',
+		props,
+	);
+	renderTaskList(side, 'Tasks', props.taskDay.tasks, 'tasks', props);
 	renderNotes(side, props.taskDay);
 }
 
@@ -100,10 +109,12 @@ function renderTaskList(
 	parent: HTMLElement,
 	title: string,
 	tasks: CalendarTaskItem[],
+	section: TaskSection,
 	props: DayColumnProps,
 ): void {
 	const panel = parent.createDiv({ cls: 'ocp-panel ocp-task-panel' });
 	panel.createEl('h3', { text: title });
+	renderAddTaskForm(panel, title, section, props);
 
 	if (tasks.length === 0) {
 		panel.createDiv({ cls: 'ocp-empty-state', text: 'No tasks.' });
@@ -127,6 +138,35 @@ function renderTaskList(
 			label.addClass('is-complete');
 		}
 	}
+}
+
+function renderAddTaskForm(
+	parent: HTMLElement,
+	title: string,
+	section: TaskSection,
+	props: DayColumnProps,
+): void {
+	const form = parent.createEl('form', { cls: 'ocp-add-task-form' });
+	const input = form.createEl('input', { cls: 'ocp-add-task-input' });
+	input.type = 'text';
+	input.placeholder = `Add ${title.toLowerCase()}`;
+
+	const button = form.createEl('button', { cls: 'ocp-add-task-button' });
+	button.type = 'submit';
+	button.setAttr('aria-label', `Add ${title.toLowerCase()}`);
+	setIcon(button, 'plus');
+
+	form.addEventListener('submit', (event) => {
+		event.preventDefault();
+		const text = input.value.trim();
+		if (!text) {
+			return;
+		}
+
+		input.disabled = true;
+		button.disabled = true;
+		void props.onAddTask(section, text);
+	});
 }
 
 function renderNotes(parent: HTMLElement, taskDay: CalendarTaskDay): void {
