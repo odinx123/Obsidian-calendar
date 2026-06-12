@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "calendar-planner",
+	"version": "0.1.0",
+	"description": "A local-first hybrid calendar view for monthly planning and daily execution in Obsidian.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {

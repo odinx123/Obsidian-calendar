@@ -1,11 +1,8 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
-	"version": "1.0.0",
-	"minAppVersion": "1.0.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"id": "calendar-planner",
+	"name": "Calendar Planner",
+	"version": "0.1.0",
+	"minAppVersion": "1.7.2",
+	"description": "A local-first hybrid calendar view for monthly planning and daily execution.",
 	"isDesktopOnly": false
 }
