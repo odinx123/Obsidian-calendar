@@ -1,11 +1,12 @@
 import { Notice, Plugin } from 'obsidian';
 import { VIEW_TYPE_CALENDAR_PLANNER } from './constants';
+import { CreateEventModal } from './modals/create-event-modal';
 import { CalendarRepository } from './services/calendar-repository';
 import {
 	DEFAULT_SETTINGS,
 	CalendarPlannerSettingTab,
 } from './settings';
-import type { CalendarPlannerSettings } from './types';
+import type { CalendarEventInput, CalendarPlannerSettings } from './types';
 import { CalendarPlannerView } from './views/calendar-view';
 
 export default class CalendarPlannerPlugin extends Plugin {
@@ -34,9 +35,9 @@ export default class CalendarPlannerPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'create-event-note',
-			name: 'Create event note',
+			name: 'Create event',
 			callback: () => {
-				void this.createEventNote();
+				this.openCreateEventModal();
 			},
 		});
 		this.addSettingTab(new CalendarPlannerSettingTab(this.app, this));
@@ -49,10 +50,19 @@ export default class CalendarPlannerPlugin extends Plugin {
 		}
 	}
 
-	async createEventNote(): Promise<void> {
+	openCreateEventModal(date = this.getActiveCalendarDate()): void {
+		new CreateEventModal(this.app, {
+			defaultDate: date,
+			defaultStartHour: this.settings.timelineStartHour,
+			onSubmit: async (input) => {
+				await this.createEventNote(input);
+			},
+		}).open();
+	}
+
+	async createEventNote(input: CalendarEventInput): Promise<void> {
 		try {
-			const date = this.getActiveCalendarDate();
-			const file = await this.repository.createEventNote(date);
+			const file = await this.repository.createEventNote(input);
 			await this.refreshCalendarViews();
 			await this.app.workspace.getLeaf(true).openFile(file);
 			new Notice('Created event note.');
@@ -60,6 +70,7 @@ export default class CalendarPlannerPlugin extends Plugin {
 			const message =
 				error instanceof Error ? error.message : 'Could not create event note';
 			new Notice(message);
+			throw error instanceof Error ? error : new Error(message);
 		}
 	}
 

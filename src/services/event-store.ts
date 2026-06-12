@@ -5,7 +5,11 @@ import {
 	parseCalendarEvent,
 	parseFrontmatterBlock,
 } from '../markdown/event-markdown';
-import type { CalendarEvent, CalendarPlannerSettings } from '../types';
+import type {
+	CalendarEvent,
+	CalendarEventInput,
+	CalendarPlannerSettings,
+} from '../types';
 import { ensureFolderPath, getEventMonthFolder } from './vault-paths';
 
 export class EventStore {
@@ -42,11 +46,14 @@ export class EventStore {
 		);
 	}
 
-	async createEventNote(date: string): Promise<TFile> {
-		const folderPath = getEventMonthFolder(this.getSettings(), dateFromString(date));
+	async createEventNote(input: CalendarEventInput): Promise<TFile> {
+		const folderPath = getEventMonthFolder(
+			this.getSettings(),
+			dateFromString(input.date),
+		);
 		await ensureFolderPath(this.app.vault, folderPath);
-		const path = this.getUniqueEventPath(folderPath, date);
-		return this.app.vault.create(path, createEventTemplate(date));
+		const path = this.getUniqueEventPath(folderPath, input);
+		return this.app.vault.create(path, createEventTemplate(input));
 	}
 
 	async readDayEvents(date: string): Promise<CalendarEvent[]> {
@@ -55,8 +62,15 @@ export class EventStore {
 		return events.filter((event) => event.date === date);
 	}
 
-	private getUniqueEventPath(folderPath: string, date: string): string {
-		const basePath = normalizePath(`${folderPath}/${date}_0900_new-event`);
+	private getUniqueEventPath(
+		folderPath: string,
+		input: CalendarEventInput,
+	): string {
+		const basePath = normalizePath(
+			`${folderPath}/${input.date}_${formatFileTime(
+				input.startMinutes,
+			)}_${sanitizeEventTitle(input.title)}`,
+		);
 		let candidate = `${basePath}.md`;
 		let index = 2;
 		while (this.app.vault.getAbstractFileByPath(candidate)) {
@@ -89,4 +103,25 @@ export class EventStore {
 
 		return parseCalendarEvent(parsedFrontmatter, file.path, file.basename);
 	}
+}
+
+function formatFileTime(minutes: number): string {
+	const hour = Math.floor(minutes / 60).toString().padStart(2, '0');
+	const minute = (minutes % 60).toString().padStart(2, '0');
+	return `${hour}${minute}`;
+}
+
+function sanitizeEventTitle(title: string): string {
+	const sanitized = title
+		.trim()
+		.replace(/[<>:"/\\|?*]+/g, '-')
+		.split('')
+		.filter((character) => character.charCodeAt(0) >= 32)
+		.join('')
+		.replace(/\s+/g, '-')
+		.replace(/-+/g, '-')
+		.replace(/[.]+$/g, '')
+		.replace(/^-+|-+$/g, '');
+
+	return sanitized || 'new-event';
 }

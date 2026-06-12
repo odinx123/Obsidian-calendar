@@ -26,6 +26,17 @@ export interface CalendarEvent {
 	status: EventStatus;
 }
 
+export interface CalendarEventInput {
+	title: string;
+	date: string;
+	startMinutes: number;
+	endMinutes: number;
+	category: CalendarCategory;
+	important: boolean;
+	deadline: boolean;
+	status: EventStatus;
+}
+
 export interface CalendarTaskItem {
 	path: string;
 	line: number;

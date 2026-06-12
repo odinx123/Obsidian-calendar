@@ -1,6 +1,11 @@
 import { DEFAULT_CATEGORY_COLORS, EVENT_STATUSES } from '../constants';
-import { parseDateTime } from '../date/date-utils';
-import type { CalendarCategory, CalendarEvent, EventStatus } from '../types';
+import { minutesToTimeLabel, parseDateTime } from '../date/date-utils';
+import type {
+	CalendarCategory,
+	CalendarEvent,
+	CalendarEventInput,
+	EventStatus,
+} from '../types';
 
 const EVENT_TYPE = 'calendar-event';
 const VALID_CATEGORIES = Object.keys(
@@ -114,20 +119,24 @@ function parseTitle(value: unknown, basename: string): string {
 	return fallback || 'Untitled event';
 }
 
-export function createEventTemplate(date: string): string {
+export function createEventTemplate(input: CalendarEventInput): string {
 	const offset = getLocalTimezoneOffsetLabel();
 	return `---
 type: calendar-event
-title: New event
-start: ${date}T09:00:00${offset}
-end: ${date}T10:00:00${offset}
-category: work
-important: false
-deadline: false
-status: planned
+title: ${quoteYamlString(input.title)}
+start: ${input.date}T${minutesToTimeLabel(input.startMinutes)}:00${offset}
+end: ${input.date}T${minutesToTimeLabel(input.endMinutes)}:00${offset}
+category: ${input.category}
+important: ${input.important ? 'true' : 'false'}
+deadline: ${input.deadline ? 'true' : 'false'}
+status: ${input.status}
 ---
 
 `;
+}
+
+function quoteYamlString(value: string): string {
+	return JSON.stringify(value);
 }
 
 function getLocalTimezoneOffsetLabel(): string {

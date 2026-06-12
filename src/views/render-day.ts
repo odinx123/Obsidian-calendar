@@ -19,6 +19,7 @@ interface DayColumnProps {
 		completed: boolean,
 	) => Promise<void>;
 	onAddTask: (section: TaskSection, text: string) => Promise<void>;
+	onCreateEvent?: () => void;
 	renderPlanningPanels?: (container: HTMLElement) => void;
 }
 
@@ -68,7 +69,16 @@ export function renderDayColumn(
 }
 
 function renderTimeline(parent: HTMLElement, props: DayColumnProps): void {
-	parent.createEl('h3', { text: 'Timeline' });
+	const header = parent.createDiv({ cls: 'ocp-panel-header' });
+	header.createEl('h3', { text: 'Timeline' });
+	if (props.onCreateEvent) {
+		const button = header.createEl('button', { cls: 'ocp-icon-button' });
+		button.type = 'button';
+		button.setAttr('aria-label', 'Create event');
+		setIcon(button, 'plus');
+		button.addEventListener('click', props.onCreateEvent);
+	}
+
 	const startHour = props.settings.timelineStartHour;
 	const endHour = Math.max(startHour + 1, props.settings.timelineEndHour);
 	const timelineStart = startHour * 60;

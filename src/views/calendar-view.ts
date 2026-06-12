@@ -120,6 +120,9 @@ export class CalendarPlannerView extends ItemView {
 			onAddTask: async (section, text) => {
 				await this.addTask(section, text);
 			},
+			onCreateEvent: () => {
+				this.plugin.openCreateEventModal(this.selectedDate);
+			},
 			renderPlanningPanels: (container) => {
 				renderPlanningPanels(container, monthProps);
 			},
