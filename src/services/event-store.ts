@@ -1,11 +1,12 @@
-import { App, TFile, TFolder } from 'obsidian';
+import { App, normalizePath, TFile, TFolder } from 'obsidian';
 import { dateFromString } from '../date/date-utils';
 import {
+	createEventTemplate,
 	parseCalendarEvent,
 	parseFrontmatterBlock,
 } from '../markdown/event-markdown';
 import type { CalendarEvent, CalendarPlannerSettings } from '../types';
-import { getEventMonthFolder } from './vault-paths';
+import { ensureFolderPath, getEventMonthFolder } from './vault-paths';
 
 export class EventStore {
 	constructor(
@@ -41,10 +42,28 @@ export class EventStore {
 		);
 	}
 
+	async createEventNote(date: string): Promise<TFile> {
+		const folderPath = getEventMonthFolder(this.getSettings(), dateFromString(date));
+		await ensureFolderPath(this.app.vault, folderPath);
+		const path = this.getUniqueEventPath(folderPath, date);
+		return this.app.vault.create(path, createEventTemplate(date));
+	}
+
 	async readDayEvents(date: string): Promise<CalendarEvent[]> {
 		const month = dateFromString(date);
 		const events = await this.readMonthEvents(month);
 		return events.filter((event) => event.date === date);
+	}
+
+	private getUniqueEventPath(folderPath: string, date: string): string {
+		const basePath = normalizePath(`${folderPath}/${date}_0900_new-event`);
+		let candidate = `${basePath}.md`;
+		let index = 2;
+		while (this.app.vault.getAbstractFileByPath(candidate)) {
+			candidate = `${basePath}-${index}.md`;
+			index += 1;
+		}
+		return candidate;
 	}
 
 	private async readEventFile(file: TFile): Promise<CalendarEvent | null> {

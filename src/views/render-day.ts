@@ -19,7 +19,24 @@ interface DayColumnProps {
 		completed: boolean,
 	) => Promise<void>;
 	onAddTask: (section: TaskSection, text: string) => Promise<void>;
+	renderPlanningPanels?: (container: HTMLElement) => void;
 }
+
+interface ClippedTimelineEvent {
+	event: CalendarEvent;
+	start: number;
+	end: number;
+}
+
+interface TimelineEventLayout extends ClippedTimelineEvent {
+	top: number;
+	height: number;
+	lane: number;
+	laneCount: number;
+}
+
+const TIMELINE_HOUR_HEIGHT = 56;
+const MIN_EVENT_BLOCK_HEIGHT = 38;
 
 export function renderDayColumn(
 	container: HTMLElement,
@@ -47,38 +64,56 @@ export function renderDayColumn(
 	);
 	renderTaskList(side, 'Tasks', props.taskDay.tasks, 'tasks', props);
 	renderNotes(side, props.taskDay);
+	props.renderPlanningPanels?.(side);
 }
 
 function renderTimeline(parent: HTMLElement, props: DayColumnProps): void {
 	parent.createEl('h3', { text: 'Timeline' });
-	const timeline = parent.createDiv({ cls: 'ocp-timeline' });
-	const start = props.settings.timelineStartHour;
-	const end = props.settings.timelineEndHour;
-	const events = [...props.events].sort(
-		(left, right) => left.startMinutes - right.startMinutes,
+	const startHour = props.settings.timelineStartHour;
+	const endHour = Math.max(startHour + 1, props.settings.timelineEndHour);
+	const timelineStart = startHour * 60;
+	const timelineEnd = endHour * 60;
+	const layouts = getTimelineLayouts(
+		props.events,
+		timelineStart,
+		timelineEnd,
 	);
 
-	for (let hour = start; hour <= end; hour += 1) {
-		const slotStart = hour * 60;
-		const slotEnd = slotStart + 60;
-		const slot = timeline.createDiv({ cls: 'ocp-time-slot' });
-		slot.createDiv({
+	const timeline = parent.createDiv({ cls: 'ocp-timeline' });
+	const body = timeline.createDiv({ cls: 'ocp-timeline-body' });
+	body.style.height = `${
+		((timelineEnd - timelineStart) / 60) * TIMELINE_HOUR_HEIGHT
+	}px`;
+
+	for (let hour = startHour; hour <= endHour; hour += 1) {
+		const marker = body.createDiv({ cls: 'ocp-time-marker' });
+		marker.style.top = `${(hour - startHour) * TIMELINE_HOUR_HEIGHT}px`;
+		marker.createDiv({
 			cls: 'ocp-time-label',
-			text: minutesToTimeLabel(slotStart),
+			text: minutesToTimeLabel(hour * 60),
 		});
-		const content = slot.createDiv({ cls: 'ocp-time-content' });
-		const slotEvents = events.filter(
-			(event) =>
-				event.startMinutes >= slotStart && event.startMinutes < slotEnd,
-		);
+		marker.createDiv({ cls: 'ocp-time-line' });
+	}
 
-		if (slotEvents.length === 0) {
-			content.createDiv({ cls: 'ocp-empty-slot' });
-			continue;
-		}
-
-		for (const event of slotEvents) {
-			renderEventCard(content, event, props.settings);
+	const eventLayer = body.createDiv({ cls: 'ocp-timeline-events' });
+	for (const layout of layouts) {
+		const card = renderEventCard(eventLayer, layout.event, props.settings);
+		card.addClass('is-timeline-block');
+		card.style.top = `${layout.top}px`;
+		card.style.height = `${layout.height}px`;
+		if (layout.laneCount > 1) {
+			const laneWidth = 100 / layout.laneCount;
+			card.setCssProps({
+				'--ocp-event-left': `calc(${laneWidth * layout.lane}% + 3px)`,
+				'--ocp-event-right': 'auto',
+				'--ocp-event-width': `calc(${laneWidth}% - 6px)`,
+			});
+		} else {
+			card.setCssProps({
+				'--ocp-event-left': '0',
+				'--ocp-event-right': '0',
+				'--ocp-event-width': 'auto',
+			});
 		}
 	}
 }
@@ -87,22 +122,129 @@ function renderEventCard(
 	parent: HTMLElement,
 	event: CalendarEvent,
 	settings: CalendarPlannerSettings,
-): void {
+): HTMLElement {
 	const card = parent.createDiv({ cls: 'ocp-event-card' });
+	if (event.deadline) {
+		card.addClass('has-deadline');
+	}
+	if (event.important) {
+		card.addClass('has-important');
+	}
 	card.style.borderLeftColor = settings.categories[event.category];
 	card.createDiv({ cls: 'ocp-event-title', text: event.title });
 	card.createDiv({
 		cls: 'ocp-event-time',
 		text: `${minutesToTimeLabel(event.startMinutes)} - ${minutesToTimeLabel(
 			event.endMinutes,
-		)} · ${CATEGORY_LABELS[event.category]}`,
+		)} - ${CATEGORY_LABELS[event.category]}`,
 	});
-	if (event.important || event.deadline) {
-		card.createDiv({
-			cls: 'ocp-event-flag',
-			text: event.deadline ? 'Deadline' : 'Important',
-		});
+	renderEventFlags(card, event);
+	return card;
+}
+
+function renderEventFlags(parent: HTMLElement, event: CalendarEvent): void {
+	if (!event.important && !event.deadline) {
+		return;
 	}
+
+	const row = parent.createDiv({ cls: 'ocp-event-flags' });
+	if (event.deadline) {
+		row.createSpan({ cls: 'ocp-event-flag is-deadline', text: 'Deadline' });
+	}
+	if (event.important) {
+		row.createSpan({ cls: 'ocp-event-flag is-important', text: 'Important' });
+	}
+}
+
+function getTimelineLayouts(
+	events: CalendarEvent[],
+	timelineStart: number,
+	timelineEnd: number,
+): TimelineEventLayout[] {
+	const clippedEvents = events
+		.map((event): ClippedTimelineEvent | null => {
+			const eventEnd = Math.max(event.endMinutes, event.startMinutes + 15);
+			const displayStart = Math.max(event.startMinutes, timelineStart);
+			const displayEnd = Math.min(eventEnd, timelineEnd);
+			if (displayEnd <= timelineStart || displayStart >= timelineEnd) {
+				return null;
+			}
+			if (displayEnd <= displayStart) {
+				return null;
+			}
+			return { event, start: displayStart, end: displayEnd };
+		})
+		.filter((event): event is ClippedTimelineEvent => event !== null)
+		.sort(
+			(left, right) =>
+				left.start - right.start ||
+				left.end - right.end ||
+				left.event.title.localeCompare(right.event.title),
+		);
+
+	const layouts: TimelineEventLayout[] = [];
+	let group: ClippedTimelineEvent[] = [];
+	let groupEnd = Number.NEGATIVE_INFINITY;
+	for (const event of clippedEvents) {
+		if (group.length === 0 || event.start < groupEnd) {
+			group.push(event);
+			groupEnd = Math.max(groupEnd, event.end);
+			continue;
+		}
+
+		layouts.push(...layoutTimelineGroup(group, timelineStart, timelineEnd));
+		group = [event];
+		groupEnd = event.end;
+	}
+
+	if (group.length > 0) {
+		layouts.push(...layoutTimelineGroup(group, timelineStart, timelineEnd));
+	}
+
+	return layouts;
+}
+
+function layoutTimelineGroup(
+	group: ClippedTimelineEvent[],
+	timelineStart: number,
+	timelineEnd: number,
+): TimelineEventLayout[] {
+	const laneEnds: number[] = [];
+	const assigned = group.map((event) => {
+		let lane = laneEnds.findIndex((end) => event.start >= end);
+		if (lane === -1) {
+			lane = laneEnds.length;
+			laneEnds.push(event.end);
+		} else {
+			laneEnds[lane] = event.end;
+		}
+
+		return { event, lane };
+	});
+
+	const laneCount = Math.max(1, laneEnds.length);
+	const timelineHeight =
+		((timelineEnd - timelineStart) / 60) * TIMELINE_HOUR_HEIGHT;
+
+	return assigned.map(({ event, lane }) => {
+		const top =
+			((event.start - timelineStart) / 60) * TIMELINE_HOUR_HEIGHT;
+		const rawHeight =
+			((event.end - event.start) / 60) * TIMELINE_HOUR_HEIGHT - 4;
+		const maxHeight = Math.max(24, timelineHeight - top - 2);
+		const height = Math.min(
+			Math.max(MIN_EVENT_BLOCK_HEIGHT, rawHeight),
+			maxHeight,
+		);
+
+		return {
+			...event,
+			top,
+			height,
+			lane,
+			laneCount,
+		};
+	});
 }
 
 function renderTaskList(

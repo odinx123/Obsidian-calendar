@@ -17,7 +17,7 @@ import type {
 	WeekStartsOn,
 } from '../types';
 
-interface MonthColumnProps {
+export interface MonthColumnProps {
 	displayMonth: Date;
 	selectedDate: string;
 	today: string;
@@ -37,8 +37,6 @@ export function renderMonthColumn(
 	renderMonthHeader(container, props);
 	renderCalendar(container, props.displayMonth, props, false);
 	renderCalendar(container, addMonths(props.displayMonth, 1), props, true);
-	renderWeeklyFocus(container, props);
-	renderImportantReminders(container, props);
 }
 
 function renderMonthHeader(
@@ -68,7 +66,9 @@ function renderCalendar(
 	compact: boolean,
 ): void {
 	const panel = container.createDiv({
-		cls: compact ? 'ocp-panel ocp-calendar-panel is-compact' : 'ocp-panel ocp-calendar-panel',
+		cls: compact
+			? 'ocp-panel ocp-calendar-panel is-compact'
+			: 'ocp-panel ocp-calendar-panel',
 	});
 	if (compact) {
 		panel.createEl('h3', { text: `${formatMonthLabel(month)} preview` });
@@ -116,8 +116,15 @@ function renderDayEvents(
 	props: MonthColumnProps,
 ): void {
 	const list = cell.createDiv({ cls: 'ocp-day-events' });
-	for (const event of events.slice(0, 2)) {
+	const sortedEvents = [...events].sort(compareEventDateTime);
+	for (const event of sortedEvents.slice(0, 2)) {
 		const item = list.createDiv({ cls: 'ocp-day-event' });
+		if (event.deadline) {
+			item.addClass('has-deadline');
+		}
+		if (event.important) {
+			item.addClass('has-important');
+		}
 		item.style.borderLeftColor = props.categoryColors[event.category];
 		item.createSpan({ text: event.title });
 	}
@@ -127,6 +134,14 @@ function renderDayEvents(
 			text: `+${events.length - 2} more`,
 		});
 	}
+}
+
+export function renderPlanningPanels(
+	container: HTMLElement,
+	props: MonthColumnProps,
+): void {
+	renderWeeklyFocus(container, props);
+	renderImportantReminders(container, props);
 }
 
 function renderWeeklyFocus(
@@ -155,13 +170,17 @@ function renderImportantReminders(
 	props: MonthColumnProps,
 ): void {
 	const panel = container.createDiv({ cls: 'ocp-panel ocp-list-panel' });
-	panel.createEl('h3', { text: 'Important reminders' });
+	panel.createEl('h3', { text: 'Important & deadlines' });
 	const events = flattenEvents(props.eventsByDate)
 		.filter((event) => event.important || event.deadline)
+		.sort(compareReminderEvents)
 		.slice(0, 6);
 
 	if (events.length === 0) {
-		panel.createDiv({ cls: 'ocp-empty-state', text: 'No important reminders.' });
+		panel.createDiv({
+			cls: 'ocp-empty-state',
+			text: 'No important events or deadlines.',
+		});
 		return;
 	}
 
@@ -176,25 +195,69 @@ function renderCompactEvent(
 	props: MonthColumnProps,
 ): void {
 	const row = parent.createDiv({ cls: 'ocp-compact-event' });
+	if (event.deadline) {
+		row.addClass('has-deadline');
+	}
+	if (event.important) {
+		row.addClass('has-important');
+	}
 	row.style.borderLeftColor = props.categoryColors[event.category];
 	row.createDiv({ cls: 'ocp-compact-title', text: event.title });
 	row.createDiv({
 		cls: 'ocp-compact-meta',
-		text: `${event.date} ${minutesToTimeLabel(event.startMinutes)} · ${
+		text: `${event.date} ${minutesToTimeLabel(
+			event.startMinutes,
+		)}-${minutesToTimeLabel(event.endMinutes)} - ${
 			CATEGORY_LABELS[event.category]
 		}`,
 	});
+	renderCompactEventFlags(row, event);
+}
+
+function renderCompactEventFlags(
+	parent: HTMLElement,
+	event: CalendarEvent,
+): void {
+	if (!event.important && !event.deadline) {
+		return;
+	}
+
+	const row = parent.createDiv({ cls: 'ocp-compact-flags' });
+	if (event.deadline) {
+		row.createSpan({ cls: 'ocp-compact-flag is-deadline', text: 'Deadline' });
+	}
+	if (event.important) {
+		row.createSpan({ cls: 'ocp-compact-flag is-important', text: 'Important' });
+	}
 }
 
 function flattenEvents(
 	eventsByDate: Map<string, CalendarEvent[]>,
 ): CalendarEvent[] {
-	return Array.from(eventsByDate.values())
-		.flat()
-		.sort(
-			(left, right) =>
-				left.date.localeCompare(right.date) ||
-				left.startMinutes - right.startMinutes ||
-				left.title.localeCompare(right.title),
-		);
+	return Array.from(eventsByDate.values()).flat().sort(compareEventDateTime);
+}
+
+function compareReminderEvents(
+	left: CalendarEvent,
+	right: CalendarEvent,
+): number {
+	const deadlinePriority = Number(right.deadline) - Number(left.deadline);
+	if (deadlinePriority !== 0) {
+		return deadlinePriority;
+	}
+
+	const importantPriority = Number(right.important) - Number(left.important);
+	if (importantPriority !== 0) {
+		return importantPriority;
+	}
+
+	return compareEventDateTime(left, right);
+}
+
+function compareEventDateTime(left: CalendarEvent, right: CalendarEvent): number {
+	return (
+		left.date.localeCompare(right.date) ||
+		left.startMinutes - right.startMinutes ||
+		left.title.localeCompare(right.title)
+	);
 }

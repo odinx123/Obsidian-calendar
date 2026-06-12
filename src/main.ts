@@ -32,6 +32,13 @@ export default class CalendarPlannerPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: 'create-event-note',
+			name: 'Create event note',
+			callback: () => {
+				void this.createEventNote();
+			},
+		});
 		this.addSettingTab(new CalendarPlannerSettingTab(this.app, this));
 
 		try {
@@ -42,6 +49,42 @@ export default class CalendarPlannerPlugin extends Plugin {
 		}
 	}
 
+	async createEventNote(): Promise<void> {
+		try {
+			const date = this.getActiveCalendarDate();
+			const file = await this.repository.createEventNote(date);
+			await this.refreshCalendarViews();
+			await this.app.workspace.getLeaf(true).openFile(file);
+			new Notice('Created event note.');
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : 'Could not create event note';
+			new Notice(message);
+		}
+	}
+
+	private getActiveCalendarDate(): string {
+		const calendarLeaves = this.app.workspace.getLeavesOfType(
+			VIEW_TYPE_CALENDAR_PLANNER,
+		);
+		for (const leaf of calendarLeaves) {
+			if (leaf.view instanceof CalendarPlannerView) {
+				return leaf.view.getSelectedDate();
+			}
+		}
+		return new Date().toISOString().slice(0, 10);
+	}
+
+	private async refreshCalendarViews(): Promise<void> {
+		const calendarLeaves = this.app.workspace.getLeavesOfType(
+			VIEW_TYPE_CALENDAR_PLANNER,
+		);
+		for (const leaf of calendarLeaves) {
+			if (leaf.view instanceof CalendarPlannerView) {
+				await leaf.view.refresh();
+			}
+		}
+	}
 
 	async activateView() {
 		const existingLeaf = this.app.workspace.getLeavesOfType(

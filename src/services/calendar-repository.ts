@@ -1,4 +1,4 @@
-import type { App } from 'obsidian';
+import type { App, TFile } from 'obsidian';
 import { EventStore } from './event-store';
 import { TaskStore } from './task-store';
 import {
@@ -53,6 +53,11 @@ export class CalendarRepository {
 			events,
 			tasks,
 		};
+	}
+
+	async createEventNote(date: string): Promise<TFile> {
+		await this.ensureCalendarStructure();
+		return this.eventStore.createEventNote(date);
 	}
 
 	async addTask(

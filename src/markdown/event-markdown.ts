@@ -113,3 +113,28 @@ function parseTitle(value: unknown, basename: string): string {
 	const fallback = basename.replace(/^\d{4}-\d{2}-\d{2}_\d{4}_/, '');
 	return fallback || 'Untitled event';
 }
+
+export function createEventTemplate(date: string): string {
+	const offset = getLocalTimezoneOffsetLabel();
+	return `---
+type: calendar-event
+title: New event
+start: ${date}T09:00:00${offset}
+end: ${date}T10:00:00${offset}
+category: work
+important: false
+deadline: false
+status: planned
+---
+
+`;
+}
+
+function getLocalTimezoneOffsetLabel(): string {
+	const offsetMinutes = -new Date().getTimezoneOffset();
+	const sign = offsetMinutes >= 0 ? '+' : '-';
+	const absoluteMinutes = Math.abs(offsetMinutes);
+	const hours = Math.floor(absoluteMinutes / 60).toString().padStart(2, '0');
+	const minutes = (absoluteMinutes % 60).toString().padStart(2, '0');
+	return `${sign}${hours}:${minutes}`;
+}

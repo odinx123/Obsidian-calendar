@@ -15,7 +15,7 @@ import type {
 	TaskSection,
 } from '../types';
 import { renderDayColumn } from './render-day';
-import { renderMonthColumn } from './render-month';
+import { renderMonthColumn, renderPlanningPanels } from './render-month';
 
 export class CalendarPlannerView extends ItemView {
 	private displayMonth = startOfMonth(new Date());
@@ -44,6 +44,10 @@ export class CalendarPlannerView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		await this.refresh();
+	}
+
+	getSelectedDate(): string {
+		return this.selectedDate;
 	}
 
 	async refresh(): Promise<void> {
@@ -85,7 +89,7 @@ export class CalendarPlannerView extends ItemView {
 		const left = root.createDiv({ cls: 'ocp-column ocp-column-left' });
 		const right = root.createDiv({ cls: 'ocp-column ocp-column-right' });
 
-		renderMonthColumn(left, {
+		const monthProps = {
 			displayMonth: this.displayMonth,
 			selectedDate: this.selectedDate,
 			today: getTodayString(),
@@ -98,10 +102,12 @@ export class CalendarPlannerView extends ItemView {
 			onNextMonth: () => {
 				void this.shiftMonth(1);
 			},
-			onSelectDate: (date) => {
+			onSelectDate: (date: string) => {
 				void this.selectDate(date);
 			},
-		});
+		};
+
+		renderMonthColumn(left, monthProps);
 
 		renderDayColumn(right, {
 			selectedDate: this.selectedDate,
@@ -113,6 +119,9 @@ export class CalendarPlannerView extends ItemView {
 			},
 			onAddTask: async (section, text) => {
 				await this.addTask(section, text);
+			},
+			renderPlanningPanels: (container) => {
+				renderPlanningPanels(container, monthProps);
 			},
 		});
 	}

@@ -186,6 +186,16 @@
 	text-overflow: ellipsis;
 }
 
+.ocp-day-event.has-deadline,
+.ocp-compact-event.has-deadline {
+	box-shadow: inset 0 0 0 1px var(--text-error);
+}
+
+.ocp-day-event.has-important:not(.has-deadline),
+.ocp-compact-event.has-important:not(.has-deadline) {
+	box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
 .ocp-more-events,
 .ocp-event-count {
 	color: var(--text-muted);
@@ -217,6 +227,38 @@
 	margin-top: 2px;
 }
 
+.ocp-compact-flags,
+.ocp-event-flags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 5px;
+}
+
+.ocp-compact-flag,
+.ocp-event-flag {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	padding: 1px 6px;
+	font-size: 11px;
+	line-height: 1.35;
+	font-weight: 650;
+	background: var(--background-primary);
+	color: var(--text-muted);
+}
+
+.ocp-compact-flag.is-deadline,
+.ocp-event-flag.is-deadline {
+	border-color: var(--text-error);
+	color: var(--text-error);
+}
+
+.ocp-compact-flag.is-important,
+.ocp-event-flag.is-important {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+
 .ocp-day-layout {
 	display: grid;
 	grid-template-columns: minmax(260px, 1.1fr) minmax(240px, 0.85fr);
@@ -237,18 +279,23 @@
 
 .ocp-timeline {
 	margin-top: 10px;
-	display: flex;
-	flex-direction: column;
-	border-top: 1px solid var(--background-modifier-border);
+	padding-bottom: 18px;
 }
 
-.ocp-time-slot {
+.ocp-timeline-body {
+	position: relative;
+	min-height: 220px;
+}
+
+.ocp-time-marker {
+	position: absolute;
+	left: 0;
+	right: 0;
 	display: grid;
 	grid-template-columns: 56px minmax(0, 1fr);
 	gap: 10px;
-	min-height: 48px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	padding: 8px 0;
+	align-items: start;
+	pointer-events: none;
 }
 
 .ocp-time-label {
@@ -257,19 +304,33 @@
 	line-height: 1.2;
 }
 
-.ocp-time-content {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	min-width: 0;
+.ocp-time-line {
+	border-top: 1px solid var(--background-modifier-border);
+	height: 1px;
+	margin-top: 7px;
 }
 
-.ocp-empty-slot {
-	min-height: 24px;
+.ocp-timeline-events {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 66px;
 }
 
 .ocp-event-card {
 	padding: 8px 10px;
+}
+
+.ocp-event-card.is-timeline-block {
+	position: absolute;
+	left: var(--ocp-event-left, 0);
+	right: var(--ocp-event-right, 0);
+	width: var(--ocp-event-width, auto);
+	box-sizing: border-box;
+	overflow: hidden;
+	padding: 7px 9px;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
 }
 
 .ocp-event-title {
@@ -279,8 +340,7 @@
 	overflow-wrap: anywhere;
 }
 
-.ocp-event-time,
-.ocp-event-flag {
+.ocp-event-time {
 	color: var(--text-muted);
 	font-size: 12px;
 	line-height: 1.25;
