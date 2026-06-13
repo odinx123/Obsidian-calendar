@@ -18,6 +18,15 @@ import type {
 import { renderDayColumn } from './render-day';
 import { renderMonthColumn, renderPlanningPanels } from './render-month';
 
+type RefreshResult = 'rendered' | 'failed' | 'superseded';
+
+interface ViewSelectionState {
+	displayMonth: Date;
+	selectedDate: string;
+	selectedEventPath: string | null;
+	selectedTimelineRange: CalendarTimeRange | null;
+}
+
 export class CalendarPlannerView extends ItemView {
 	private displayMonth = startOfMonth(new Date());
 	private selectedDate = getTodayString();
@@ -25,6 +34,8 @@ export class CalendarPlannerView extends ItemView {
 	private dayData: CalendarDayData | null = null;
 	private selectedEventPath: string | null = null;
 	private selectedTimelineRange: CalendarTimeRange | null = null;
+	private refreshRequestId = 0;
+	private lastRenderedSelectionState: ViewSelectionState | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -53,15 +64,29 @@ export class CalendarPlannerView extends ItemView {
 		return this.selectedDate;
 	}
 
-	async refresh(): Promise<void> {
-		this.renderLoading();
+	async refresh(): Promise<RefreshResult> {
+		const requestId = ++this.refreshRequestId;
+		const displayMonth = this.displayMonth;
+		const selectedDate = this.selectedDate;
+		const hasRenderedCalendar = this.hasRenderedCalendar();
+		this.setRefreshing(true);
+		if (hasRenderedCalendar) {
+			this.showRefreshStatus('Updating calendar...');
+		} else {
+			this.renderLoading();
+		}
+
 		try {
-			const nextMonth = addMonths(this.displayMonth, 1);
+			const nextMonth = addMonths(displayMonth, 1);
 			const [monthEvents, nextMonthEvents, dayData] = await Promise.all([
-				this.plugin.repository.readMonthEvents(this.displayMonth),
+				this.plugin.repository.readMonthEvents(displayMonth),
 				this.plugin.repository.readMonthEvents(nextMonth),
-				this.plugin.repository.readDay(this.selectedDate),
+				this.plugin.repository.readDay(selectedDate),
 			]);
+			if (requestId !== this.refreshRequestId) {
+				return 'superseded';
+			}
+
 			this.monthEvents = [...monthEvents, ...nextMonthEvents];
 			this.dayData = dayData;
 			if (
@@ -71,8 +96,54 @@ export class CalendarPlannerView extends ItemView {
 				this.selectedEventPath = null;
 			}
 			this.render();
+			this.lastRenderedSelectionState = this.captureSelectionState();
+			return 'rendered';
 		} catch (error) {
-			this.renderError(error);
+			if (requestId !== this.refreshRequestId) {
+				return 'superseded';
+			}
+
+			this.renderError(error, hasRenderedCalendar);
+			return 'failed';
+		} finally {
+			if (requestId === this.refreshRequestId) {
+				this.setRefreshing(false);
+			}
+		}
+	}
+
+	private hasRenderedCalendar(): boolean {
+		return this.contentEl.querySelector('.ocp-root') !== null;
+	}
+
+	private setRefreshing(refreshing: boolean): void {
+		this.contentEl.classList.toggle('is-refreshing', refreshing);
+		if (refreshing) {
+			this.contentEl.setAttribute('aria-busy', 'true');
+		} else {
+			this.contentEl.removeAttribute('aria-busy');
+			this.clearRefreshStatus(false);
+		}
+	}
+
+	private showRefreshStatus(message: string, isError = false): void {
+		this.clearRefreshStatus(true);
+		const status = activeDocument.createElement('div');
+		status.className = isError
+			? 'ocp-refresh-status is-error'
+			: 'ocp-refresh-status';
+		status.setAttribute('role', 'status');
+		status.textContent = message;
+		this.contentEl.prepend(status);
+	}
+
+	private clearRefreshStatus(includeErrors: boolean): void {
+		for (const status of Array.from(
+			this.contentEl.querySelectorAll('.ocp-refresh-status'),
+		)) {
+			if (includeErrors || !status.classList.contains('is-error')) {
+				status.remove();
+			}
 		}
 	}
 
@@ -91,6 +162,7 @@ export class CalendarPlannerView extends ItemView {
 			return;
 		}
 
+		this.clearRefreshStatus(true);
 		this.contentEl.empty();
 		this.contentEl.addClass('ocp-view');
 
@@ -153,10 +225,17 @@ export class CalendarPlannerView extends ItemView {
 		});
 	}
 
-	private renderError(error: unknown): void {
-		this.contentEl.empty();
+	private renderError(error: unknown, preserveCurrentContent: boolean): void {
 		const message =
 			error instanceof Error ? error.message : 'Unknown calendar error';
+		if (preserveCurrentContent) {
+			this.showRefreshStatus(`Update failed: ${message}`, true);
+			new Notice('Calendar planner failed to update.');
+			return;
+		}
+
+		this.contentEl.empty();
+		this.contentEl.addClass('ocp-view');
 		this.contentEl.createDiv({
 			cls: 'ocp-error',
 			text: `Calendar planner error: ${message}`,
@@ -164,20 +243,50 @@ export class CalendarPlannerView extends ItemView {
 		new Notice('Calendar planner failed to load.');
 	}
 
+	private captureSelectionState(): ViewSelectionState {
+		return {
+			displayMonth: new Date(this.displayMonth.getTime()),
+			selectedDate: this.selectedDate,
+			selectedEventPath: this.selectedEventPath,
+			selectedTimelineRange: this.selectedTimelineRange
+				? { ...this.selectedTimelineRange }
+				: null,
+		};
+	}
+
+	private restoreSelectionState(state: ViewSelectionState): void {
+		this.displayMonth = state.displayMonth;
+		this.selectedDate = state.selectedDate;
+		this.selectedEventPath = state.selectedEventPath;
+		this.selectedTimelineRange = state.selectedTimelineRange;
+	}
+
 	private async selectDate(date: string): Promise<void> {
+		const previousState = this.captureSelectionState();
 		this.selectedDate = date;
 		this.selectedEventPath = null;
 		this.selectedTimelineRange = null;
 		this.displayMonth = startOfMonth(dateFromString(date));
-		await this.refresh();
+		const result = await this.refresh();
+		if (result === 'failed') {
+			this.restoreSelectionState(
+				this.lastRenderedSelectionState ?? previousState,
+			);
+		}
 	}
 
 	private async shiftMonth(amount: number): Promise<void> {
+		const previousState = this.captureSelectionState();
 		this.displayMonth = addMonths(this.displayMonth, amount);
 		this.selectedDate = formatDate(this.displayMonth);
 		this.selectedEventPath = null;
 		this.selectedTimelineRange = null;
-		await this.refresh();
+		const result = await this.refresh();
+		if (result === 'failed') {
+			this.restoreSelectionState(
+				this.lastRenderedSelectionState ?? previousState,
+			);
+		}
 	}
 
 	private async addTask(section: TaskSection, text: string): Promise<void> {

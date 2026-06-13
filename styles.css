@@ -1,6 +1,35 @@
 .ocp-view {
 	height: 100%;
 	overflow: auto;
+	position: relative;
+}
+
+.ocp-refresh-status {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	z-index: 20;
+	max-width: min(260px, calc(100% - 24px));
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+	color: var(--text-muted);
+	font-size: 12px;
+	font-weight: 650;
+	line-height: 1.25;
+	padding: 6px 8px;
+	pointer-events: none;
+}
+
+.ocp-refresh-status.is-error {
+	border-color: var(--text-error);
+	color: var(--text-error);
+}
+
+.ocp-view.is-refreshing .ocp-root {
+	opacity: 0.96;
+	transition: opacity 120ms ease;
 }
 
 .ocp-root {
@@ -492,37 +521,79 @@
 	line-height: 1.2;
 }
 
-.ocp-event-detail-body {
+.ocp-event-detail-controls {
+	margin-bottom: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 4px 8px;
+}
+
+.ocp-event-editor-grid {
 	display: grid;
-	gap: 8px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
 	margin-bottom: 12px;
 }
 
-.ocp-event-detail-row {
+.ocp-event-editor-field,
+.ocp-event-editor-section {
 	display: grid;
-	grid-template-columns: 96px minmax(0, 1fr);
-	gap: 10px;
-	align-items: start;
+	gap: 6px;
 }
 
-.ocp-event-detail-label {
-	color: var(--text-muted);
-	font-size: 12px;
-	font-weight: 700;
-	line-height: 1.35;
-}
-
-.ocp-event-detail-value {
-	color: var(--text-normal);
+.ocp-event-editor-field label,
+.ocp-event-editor-section h3 {
+	margin: 0;
 	font-size: 13px;
-	line-height: 1.35;
-	overflow-wrap: anywhere;
+	line-height: 1.2;
+	letter-spacing: 0;
+	font-weight: 700;
 }
 
-.ocp-event-detail-flags {
+.ocp-event-editor-input,
+.ocp-event-editor-textarea {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+.ocp-event-editor-textarea {
+	resize: vertical;
+	min-height: 96px;
+	line-height: 1.45;
+}
+
+.ocp-event-editor-section {
+	margin-bottom: 12px;
+}
+
+.ocp-event-description-references {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px;
+	gap: 6px;
+}
+
+.ocp-event-description-reference {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: 12px;
+	line-height: 1.25;
+	padding: 5px 7px;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+
+.ocp-event-description-reference:hover {
+	background: var(--background-modifier-hover);
+}
+
+@media (max-width: 620px) {
+	.ocp-event-editor-grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 .ocp-modal-error {

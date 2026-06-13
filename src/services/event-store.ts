@@ -3,12 +3,15 @@ import { dateFromString } from '../date/date-utils';
 import {
 	createEventTemplate,
 	parseCalendarEvent,
+	parseCalendarEventDetails,
 	parseFrontmatterBlock,
+	updateEventFrontmatter,
 } from '../markdown/event-markdown';
 import type {
 	CalendarEvent,
 	CalendarEventInput,
 	CalendarPlannerSettings,
+	CalendarEventUpdateInput,
 } from '../types';
 import { ensureFolderPath, getEventMonthFolder } from './vault-paths';
 
@@ -56,6 +59,36 @@ export class EventStore {
 		return this.app.vault.create(path, createEventTemplate(input));
 	}
 
+	async updateEvent(
+		path: string,
+		update: CalendarEventUpdateInput,
+	): Promise<CalendarEvent> {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) {
+			throw new Error('Event note was not found.');
+		}
+
+		const content = await this.app.vault.read(file);
+		await this.app.vault.modify(file, updateEventFrontmatter(content, update));
+		const updatedEvent = await this.readEventFile(file);
+		if (!updatedEvent) {
+			throw new Error('Updated event note could not be read.');
+		}
+		return updatedEvent;
+	}
+
+	async readEventByPath(path: string): Promise<CalendarEvent> {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) {
+			throw new Error('Event note was not found.');
+		}
+		const event = await this.readEventFile(file);
+		if (!event) {
+			throw new Error('Event note could not be read.');
+		}
+		return event;
+	}
+
 	async readDayEvents(date: string): Promise<CalendarEvent[]> {
 		const month = dateFromString(date);
 		const events = await this.readMonthEvents(month);
@@ -81,6 +114,18 @@ export class EventStore {
 	}
 
 	private async readEventFile(file: TFile): Promise<CalendarEvent | null> {
+		const content = await this.app.vault.read(file);
+		const details = parseCalendarEventDetails(content);
+		const parsedFrontmatter = parseFrontmatterBlock(content);
+		if (parsedFrontmatter) {
+			return parseCalendarEvent(
+				parsedFrontmatter,
+				file.path,
+				file.basename,
+				details,
+			);
+		}
+
 		const cachedFrontmatter = this.app.metadataCache.getFileCache(file)
 			?.frontmatter;
 
@@ -89,19 +134,14 @@ export class EventStore {
 				cachedFrontmatter,
 				file.path,
 				file.basename,
+				details,
 			);
 			if (cachedEvent) {
 				return cachedEvent;
 			}
 		}
 
-		const content = await this.app.vault.read(file);
-		const parsedFrontmatter = parseFrontmatterBlock(content);
-		if (!parsedFrontmatter) {
-			return null;
-		}
-
-		return parseCalendarEvent(parsedFrontmatter, file.path, file.basename);
+		return null;
 	}
 }
 

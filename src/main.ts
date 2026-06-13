@@ -10,6 +10,8 @@ import {
 import type {
 	CalendarEvent,
 	CalendarEventInput,
+	CalendarEventUpdateInput,
+	CalendarEventFileRef,
 	CalendarPlannerSettings,
 	CalendarTimeRange,
 } from './types';
@@ -74,17 +76,22 @@ export default class CalendarPlannerPlugin extends Plugin {
 	openEventDetailModal(event: CalendarEvent): void {
 		new EventDetailModal(this.app, {
 			event,
+			onUpdateEvent: async (selectedEvent, update) => {
+				return this.updateEvent(selectedEvent, update);
+			},
 			onOpenNote: async (selectedEvent) => {
 				await this.openEventNote(selectedEvent);
+			},
+			onOpenFileRef: async (selectedEvent, fileRef) => {
+				await this.openFileReference(selectedEvent, fileRef);
 			},
 		}).open();
 	}
 
 	async createEventNote(input: CalendarEventInput): Promise<void> {
 		try {
-			const file = await this.repository.createEventNote(input);
+			await this.repository.createEventNote(input);
 			await this.refreshCalendarViews();
-			await this.app.workspace.getLeaf(true).openFile(file);
 			new Notice('Created event note.');
 		} catch (error) {
 			const message =
@@ -112,6 +119,28 @@ export default class CalendarPlannerPlugin extends Plugin {
 			throw new Error('Event note was not found.');
 		}
 		await this.app.workspace.getLeaf(true).openFile(file);
+	}
+
+	private async updateEvent(
+		event: CalendarEvent,
+		update: CalendarEventUpdateInput,
+	): Promise<CalendarEvent> {
+		const updatedEvent = await this.repository.updateEvent(event.path, update);
+		await this.refreshCalendarViews();
+		return updatedEvent;
+	}
+
+	private async openFileReference(
+		event: CalendarEvent,
+		fileRef: CalendarEventFileRef,
+	): Promise<void> {
+		const linkedFile =
+			this.app.metadataCache.getFirstLinkpathDest(fileRef.target, event.path) ??
+			this.app.vault.getAbstractFileByPath(fileRef.target);
+		if (!(linkedFile instanceof TFile)) {
+			throw new Error('Referenced file was not found.');
+		}
+		await this.app.workspace.getLeaf(true).openFile(linkedFile);
 	}
 
 	private async refreshCalendarViews(): Promise<void> {

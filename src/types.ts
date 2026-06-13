@@ -24,6 +24,7 @@ export interface CalendarEvent {
 	important: boolean;
 	deadline: boolean;
 	status: EventStatus;
+	details: CalendarEventDetails;
 }
 
 export interface CalendarEventInput {
@@ -35,6 +36,34 @@ export interface CalendarEventInput {
 	important: boolean;
 	deadline: boolean;
 	status: EventStatus;
+}
+
+export interface CalendarEventUpdateInput {
+	title?: string;
+	date?: string;
+	startMinutes?: number;
+	endMinutes?: number;
+	category?: CalendarCategory;
+	important?: boolean;
+	deadline?: boolean;
+	status?: EventStatus;
+	details?: CalendarEventDetails;
+}
+
+export interface CalendarEventDetails {
+	description: string;
+	links: CalendarEventLink[];
+	files: CalendarEventFileRef[];
+}
+
+export interface CalendarEventLink {
+	label: string;
+	target: string;
+}
+
+export interface CalendarEventFileRef {
+	label: string;
+	target: string;
 }
 
 export interface CalendarTimeRange {

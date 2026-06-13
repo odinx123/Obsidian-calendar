@@ -12,6 +12,7 @@ import type {
 	CalendarDayData,
 	CalendarEvent,
 	CalendarEventInput,
+	CalendarEventUpdateInput,
 	CalendarPlannerSettings,
 	CalendarTaskItem,
 	TaskSection,
@@ -59,6 +60,17 @@ export class CalendarRepository {
 	async createEventNote(input: CalendarEventInput): Promise<TFile> {
 		await this.ensureCalendarStructure();
 		return this.eventStore.createEventNote(input);
+	}
+
+	async readEventByPath(path: string): Promise<CalendarEvent> {
+		return this.eventStore.readEventByPath(path);
+	}
+
+	async updateEvent(
+		path: string,
+		update: CalendarEventUpdateInput,
+	): Promise<CalendarEvent> {
+		return this.eventStore.updateEvent(path, update);
 	}
 
 	async addTask(
